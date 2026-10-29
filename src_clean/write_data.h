@@ -363,3 +363,5 @@ static inline void Write_TMMC(size_t Cycle, Components& SystemComponents, size_t
   textrestartFile.close();
 }
 */
+
+#include "write_tmmc.h"

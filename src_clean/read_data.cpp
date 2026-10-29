@@ -1289,6 +1289,11 @@ void read_movies_stats_print(Components& SystemComponents, size_t sim)
       Split_Tab_Space(termsScannedLined, str);
       sscanf(termsScannedLined[1].c_str(), "%zu", &SystemComponents.PrintStatsEvery);
     }
+    if (str.find("WriteTMMCEvery", 0) != std::string::npos)
+    {
+      Split_Tab_Space(termsScannedLined, str);
+      sscanf(termsScannedLined[1].c_str(), "%zu", &SystemComponents.WriteTMMCEvery);
+    }
     if (str.find("SaveOutputToFile", 0) != std::string::npos)
     {
       Split_Tab_Space(termsScannedLined, str);

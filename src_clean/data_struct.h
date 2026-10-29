@@ -978,6 +978,7 @@ struct Components
   int3    NumberofUnitCells;
   size_t  MoviesEvery = 5000;                         // Write Movies (LAMMPS data file) every X MC Steps/Cycles
   size_t  PrintStatsEvery = 5000;                     // Write instantaneous loading and energy to screen every X MC Steps/Cycles
+  size_t  WriteTMMCEvery = 0;                         // Write TMMC statistics (TMMC_Statistics_<phase>_<cycle>.data) every X MC Steps/Cycles, 0 = only at the end
 
   size_t  Nblock=5;                                 // Number of Blocks for block averages
   size_t  CURRENTCYCLE=0;

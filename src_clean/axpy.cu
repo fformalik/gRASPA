@@ -458,6 +458,14 @@ void GatherStatisticsDuringSimulation(Variables& Vars, size_t systemId, size_t c
       if(i % SystemComponents.Tmmc[comp].UpdateTMEvery == 0)
         SystemComponents.Tmmc[comp].AdjustTMBias();
   }
+  if(SystemComponents.WriteTMMCEvery > 0 && i > 0 && i % SystemComponents.WriteTMMCEvery == 0)
+  {
+    bool HasTMMC = false;
+    for(size_t comp = 0; comp < SystemComponents.NComponents.x; comp++)
+      if(SystemComponents.Tmmc[comp].DoTMMC) HasTMMC = true;
+    if(HasTMMC)
+      Write_TMMC(i, SystemComponents, systemId, "TMMC_Statistics_" + Mode + "_" + std::to_string(i) + ".data");
+  }
   if(i % SystemComponents.MoviesEvery == 0)//Generate restart file and movies 
     GenerateRestartMovies(Vars, systemId, SystemComponents.PseudoAtoms, SimulationMode);
 }
