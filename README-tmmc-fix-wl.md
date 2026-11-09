@@ -15,6 +15,8 @@ This branch includes everything from `tmmc-dev`.
 | `WLFlatnessCheckEvery N` | 10000 | Flatness is checked every N cycles. |
 | `WLStagesBeforeSwitch N` | 1 | The bias switches to TMMC after N flat stages, or at the end of equilibration at the latest. |
 | `WLCollectAfterStages K` | 0 | The C matrix is collected only after K flat WL stages; at stage K it is zeroed. Must be < `WLStagesBeforeSwitch`. 0 = collect from the start of WL. |
+| `WLAsBiasGuess yes` | no | At the switch the TM bias is set to the WL bias (−ln g) and C is zeroed. The guess is kept as a static bias until every link of the window is known in C and every bin has `WLGuessMinVisits` steps; after that the TM bias comes from C. |
+| `WLGuessMinVisits N` | 1000 | Minimum number of steps per bin in C before the WL guess is replaced. |
 
 Without the WL keywords, old inputs run as before. The only differences come from the corrected bias (see below).
 
@@ -40,6 +42,7 @@ The C matrix uses the unbiased Pacc. With `WLCollectAfterStages 0` it is collect
 - While ln f is large, the WL bias changes every step and pushes the system out of each N before the configuration equilibrates. The transition probabilities in C are then sampled on non-equilibrium configurations.
 - In the bulk-water test, C from the first WL stages gave P(2→1) = 0.154 instead of 0.104, and lnΠ that was far too steep.
 - The TM bias built from that C pushed every window to its upper edge.
+- In the tests, deferring collection until ln f ≤ 1/64 (`WLCollectAfterStages 6`) was not enough. C collected under a static bias was correct. `WLAsBiasGuess` is the alternative: WL only supplies the starting bias, and C is collected only under a static bias.
 - FEASST WLTM avoids this with `collect_flatness` (18 of 22 stages in its TIP4P tutorial).
 
 The WL log lines in `output.txt` start with `TMMC-WL`.
