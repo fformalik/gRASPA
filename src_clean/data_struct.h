@@ -331,6 +331,10 @@ struct TMMC
         nonzeroCount++;
       }
     }
+    //Start from scratch: no value from the previous update may enter this estimate//
+    std::fill(lnpi.begin(),         lnpi.end(),         0.0);
+    std::fill(forward_lnpi.begin(), forward_lnpi.end(), 0.0);
+    std::fill(reverse_lnpi.begin(), reverse_lnpi.end(), 0.0);
     //From Vince Shen's pseudo code//
     lnpi[MinVisited] = 0.0;
     double Maxlnpi = lnpi[MinVisited];
