@@ -2494,6 +2494,12 @@ void read_component_values_from_simulation_input(Variables& Vars, Components& Sy
           sscanf(termsScannedLined[1].c_str(), "%zu", &temp_tmmc.UpdateTMEvery);
           //printf("TMMC: Bias Updated from component %s every %zu MC Step(s)!\n", MolName.c_str(), temp_tmmc.UpdateTMEvery);
         }
+        if (str.find("RezeroAfterInitialization", 0) != std::string::npos)
+        {
+          Split_Tab_Space(termsScannedLined, str);
+          if(caseInSensStringCompare(termsScannedLined[1], "yes"))
+            temp_tmmc.RezeroAfterInitialization = true;
+        }
       }
 
       if(SystemComponents.UseDNNforHostGuest)

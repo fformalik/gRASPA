@@ -135,7 +135,7 @@ struct TMMC
   bool   UseTMBias = true;  //Whether to use TM for the Bias//
   bool   RejectOutofBound = true; //Whether to reject the move out of the bound of macrostate//
   bool   TMMCRestart = false; //Whether to read a TMMC file from TMMC_Initial folder
-  bool   RezeroAfterInitialization = false;
+  bool   RezeroAfterInitialization = false; //Keyword RezeroAfterInitialization: clear C matrix/histogram/bias at the start of Equilibration//
   //Zhao's note: the N below is the Number of Molecule from the OLD STATE//
   //(According to Vince Shen's code)//
   void Update(double Pacc, size_t N, int MoveType) 
