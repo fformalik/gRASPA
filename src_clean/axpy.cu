@@ -295,6 +295,7 @@ void RunMoves(Variables& Vars, size_t box_index, int Cycle)
       NVTGibbsMove(Vars.SystemComponents, Vars.Sims, FF, Vars.GibbsStatistics);
   }
   SystemComponents.deltaE += DeltaE;
+  SystemComponents.RecordTMMCStates();
 }
 
 double CreateMolecule_InOneBox(Variables& Vars, size_t systemId, bool AlreadyHasFractionalMolecule)

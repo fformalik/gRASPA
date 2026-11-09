@@ -151,7 +151,6 @@ struct TMMC
         CMatrix[BinLocation].y += 1.0; //If for GCMC, the Pacc for these moves is always 1. should check for this//
         ln_g[BinLocation]      += WLFactor; 
         WLBias[BinLocation]     = -ln_g[N]; //WL Bias//
-        Histogram[BinLocation] ++;
         break;
       }
       case INSERTION: case SINGLE_INSERTION:
@@ -160,12 +159,7 @@ struct TMMC
         CMatrix[BinLocation].z += Pacc;     //Insertion is the third value//
         CMatrix[BinLocation].y += 1-Pacc;
         //if(OldN > CMatrix.size()) printf("At the limit, OldN: %zu, N: %zu, NewN: %zu\n", OldN, N, NewN);
-        if(RejectOutofBound && ((N + 1) > MaxMacrostate))
-        {
-          Histogram[BinLocation] ++; 
-          return;
-        }
-        Histogram[NewBinLocation] ++;
+        if(RejectOutofBound && ((N + 1) > MaxMacrostate)) return;
         ln_g[NewBinLocation]  += WLFactor;
         WLBias[NewBinLocation] = -ln_g[N]; //WL Bias//
         break;
@@ -176,13 +170,7 @@ struct TMMC
         CMatrix[BinLocation].x += Pacc;  //Deletion is the first value//
         CMatrix[BinLocation].y += 1-Pacc;
         ln_g[BinLocation]      += WLFactor;
-        int Update_State = static_cast<int>(BinLocation) - 1;
-        if(RejectOutofBound && (Update_State < static_cast<int>(MinMacrostate))) 
-        {
-          Histogram[BinLocation] ++;
-          return;
-        }
-        Histogram[NewBinLocation] ++;
+        if(RejectOutofBound && (N < MinMacrostate + 1)) return; //N - 1 < MinMacrostate, written for size_t//
         ln_g[NewBinLocation]   += WLFactor;
         WLBias[NewBinLocation]  = -ln_g[N]; //WL Bias//
         break;
@@ -205,6 +193,15 @@ struct TMMC
       }
     }
   }
+  //Histogram of the state AFTER the MC step (called once per step, after acceptance/rejection)//
+  //N is the number of full molecules (fractional molecule excluded)//
+  void RecordState(size_t N)
+  {
+    if(!DoTMMC) return;
+    if(N < MinMacrostate || N > MaxMacrostate) return;
+    size_t BinLocation = (N - MinMacrostate) * nbinPerMacrostate + currentBin;
+    Histogram[BinLocation] ++;
+  }
   //Special update function just for CBCF moves//
   void UpdateCBCF(double Pacc, size_t N, int change)
   {
@@ -217,7 +214,6 @@ struct TMMC
 
     CMatrix[BinLocation].z += Pacc;     //Insertion is the third value//
     CMatrix[BinLocation].y += 1-Pacc;
-    Histogram[NewBinLocation] ++;
     ln_g[NewBinLocation]  += WLFactor;
     WLBias[NewBinLocation] = -ln_g[N]; //WL Bias//
   }
@@ -1224,6 +1220,17 @@ struct Components
   //Some other variables for moves, system-specific//
   MoveTempStorage TempVal;
 
+  //TMMC: record the macrostate of every TMMC component after an MC step//
+  void RecordTMMCStates()
+  {
+    for(size_t comp = 0; comp < Tmmc.size(); comp++)
+    {
+      if(!Tmmc[comp].DoTMMC) continue;
+      size_t NMol = NumberOfMolecule_for_Component[comp];
+      if(hasfractionalMolecule[comp]) NMol--;
+      Tmmc[comp].RecordState(NMol);
+    }
+  }
   //TMMC bias//
   void ApplyTMMCBias_UpdateCMatrix(double& Pacc, int MoveType)
   {
