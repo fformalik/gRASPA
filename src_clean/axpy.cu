@@ -459,6 +459,21 @@ void GatherStatisticsDuringSimulation(Variables& Vars, size_t systemId, size_t c
       if(i % SystemComponents.Tmmc[comp].UpdateTMEvery == 0)
         SystemComponents.Tmmc[comp].AdjustTMBias();
   }
+  if(SimulationMode == EQUILIBRATION && i > 0) //Wang-Landau stage: flatness check, switch to the TM bias//
+  {
+    for(size_t comp = 0; comp < SystemComponents.NComponents.x; comp++)
+    {
+      TMMC& Tmmc = SystemComponents.Tmmc[comp];
+      if(!Tmmc.UseWLBias || i % Tmmc.WLFlatnessCheckEvery != 0) continue;
+      if(!Tmmc.CheckWLFlatness()) continue;
+      fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu, cycle %zu: WL histogram flat, stage %zu done, ln f -> %.6g\n", comp, i, Tmmc.WLStagesDone, Tmmc.WLFactor);
+      if(Tmmc.WLStagesDone >= Tmmc.WLStagesBeforeSwitch)
+      {
+        Tmmc.SwitchWLToTM();
+        fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu, cycle %zu: switching to the TMMC bias\n", comp, i);
+      }
+    }
+  }
   if(SystemComponents.WriteTMMCEvery > 0 && i > 0 && i % SystemComponents.WriteTMMCEvery == 0)
   {
     bool HasTMMC = false;
@@ -550,6 +565,35 @@ void InitialMCBeforeMoves(Variables& Vars, size_t systemId)
       //Clear Rosenbluth weight statistics after Initialization//
       for(size_t i = 0; i < SystemComponents.Nblock; i++)
         SystemComponents.Moves[comp].ClearRosen(i);
+      //Wang-Landau bias for the equilibration phase//
+      TMMC& Tmmc = SystemComponents.Tmmc[comp];
+      if(Tmmc.DoTMMC && Tmmc.UseWLInEquilibration)
+      {
+        Tmmc.StartWL();
+        fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu: Wang-Landau bias in equilibration, ln f = %.6g, flatness %.3g, check every %zu cycles, switch to TMMC after %zu flat stage(s)\n", comp, Tmmc.WLFactor, Tmmc.WLFlatness, Tmmc.WLFlatnessCheckEvery, Tmmc.WLStagesBeforeSwitch);
+      }
+    }
+  }
+  if(SimulationMode == PRODUCTION) //WL still active at the end of equilibration: switch to the TM bias//
+  {
+    for(size_t comp = 0; comp < SystemComponents.NComponents.x; comp++)
+    {
+      TMMC& Tmmc = SystemComponents.Tmmc[comp];
+      if(!Tmmc.UseWLBias) continue;
+      size_t Ref = 0, Lo = 0, Hi = 0;
+      bool HasData = Tmmc.MostVisitedBin(Ref);
+      if(HasData) Tmmc.KnownRange(Ref, Lo, Hi);
+      if(Tmmc.WLStagesDone == 0)
+      {
+        if(HasData)
+          fprintf(SystemComponents.OUTPUT, "TMMC-WL WARNING: component %zu: the WL histogram was never flat during equilibration! Range known in the C matrix (both directions): N = %zu - %zu (window %zu - %zu)\n", comp, Tmmc.MinMacrostate + Lo / Tmmc.nbinPerMacrostate, Tmmc.MinMacrostate + Hi / Tmmc.nbinPerMacrostate, Tmmc.MinMacrostate, Tmmc.MaxMacrostate);
+        else
+          fprintf(SystemComponents.OUTPUT, "TMMC-WL WARNING: component %zu: the WL histogram was never flat during equilibration and no macrostate was sampled!\n", comp);
+      }
+      else
+        fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu: %zu flat stage(s) (< WLStagesBeforeSwitch = %zu) at the end of equilibration\n", comp, Tmmc.WLStagesDone, Tmmc.WLStagesBeforeSwitch);
+      Tmmc.SwitchWLToTM();
+      fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu: switching to the TMMC bias at the start of production\n", comp);
     }
   }
 }

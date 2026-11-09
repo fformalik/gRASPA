@@ -136,6 +136,15 @@ struct TMMC
   bool   RejectOutofBound = true; //Whether to reject the move out of the bound of macrostate//
   bool   TMMCRestart = false; //Whether to read a TMMC file from TMMC_Initial folder
   bool   RezeroAfterInitialization = false; //Keyword RezeroAfterInitialization: clear C matrix/histogram/bias at the start of Equilibration//
+  //Wang-Landau bias during the Equilibration phase (keyword UseWLInEquilibration), TM bias afterwards//
+  //The current ln f is WLFactor; UseWLBias/UseTMBias say which bias is active//
+  bool   UseWLInEquilibration = false;
+  double WLInitialLnF         = 1.0;
+  double WLFlatness           = 0.8;   //flat if min(WLHistogram) > WLFlatness * mean(WLHistogram) over the whole window//
+  size_t WLFlatnessCheckEvery = 10000; //cycles//
+  size_t WLStagesBeforeSwitch = 1;     //switch to the TM bias after this many flat stages//
+  size_t WLStagesDone         = 0;
+  std::vector<double>  WLHistogram;    //visits in the current WL stage//
   //Zhao's note: the N below is the Number of Molecule from the OLD STATE//
   //(According to Vince Shen's code)//
   void Update(double Pacc, size_t N, int MoveType) 
@@ -149,30 +158,21 @@ struct TMMC
       {
         if(RejectOutofBound && ((N > MaxMacrostate) || (N < MinMacrostate))) return;
         CMatrix[BinLocation].y += 1.0; //If for GCMC, the Pacc for these moves is always 1. should check for this//
-        ln_g[BinLocation]      += WLFactor; 
-        WLBias[BinLocation]     = -ln_g[N]; //WL Bias//
         break;
       }
       case INSERTION: case SINGLE_INSERTION:
       {
-        size_t NewBinLocation = (N - MinMacrostate + 1) * nbinPerMacrostate + currentBin;
         CMatrix[BinLocation].z += Pacc;     //Insertion is the third value//
         CMatrix[BinLocation].y += 1-Pacc;
         //if(OldN > CMatrix.size()) printf("At the limit, OldN: %zu, N: %zu, NewN: %zu\n", OldN, N, NewN);
         if(RejectOutofBound && ((N + 1) > MaxMacrostate)) return;
-        ln_g[NewBinLocation]  += WLFactor;
-        WLBias[NewBinLocation] = -ln_g[N]; //WL Bias//
         break;
       }
       case DELETION: case SINGLE_DELETION:
       {
-        size_t NewBinLocation = (N - MinMacrostate - 1) * nbinPerMacrostate + currentBin;
         CMatrix[BinLocation].x += Pacc;  //Deletion is the first value//
         CMatrix[BinLocation].y += 1-Pacc;
-        ln_g[BinLocation]      += WLFactor;
         if(RejectOutofBound && (N < MinMacrostate + 1)) return; //N - 1 < MinMacrostate, written for size_t//
-        ln_g[NewBinLocation]   += WLFactor;
-        WLBias[NewBinLocation]  = -ln_g[N]; //WL Bias//
         break;
       }
       case CBCF_LAMBDACHANGE: case CBCF_INSERTION: case CBCF_DELETION:
@@ -201,6 +201,48 @@ struct TMMC
     if(N < MinMacrostate || N > MaxMacrostate) return;
     size_t BinLocation = (N - MinMacrostate) * nbinPerMacrostate + currentBin;
     Histogram[BinLocation] ++;
+    if(UseWLBias) //Wang-Landau: ln g += ln f for the current state, bias = -ln g//
+    {
+      ln_g[BinLocation]       += WLFactor;
+      WLBias[BinLocation]      = -ln_g[BinLocation];
+      WLHistogram[BinLocation] ++;
+    }
+  }
+  //Start the WL stage (beginning of Equilibration): ln g, WL bias and WL histogram from zero//
+  void StartWL()
+  {
+    if(!DoTMMC || !UseWLInEquilibration) return;
+    std::fill(ln_g.begin(),        ln_g.end(),        0.0);
+    std::fill(WLBias.begin(),      WLBias.end(),      0.0);
+    std::fill(WLHistogram.begin(), WLHistogram.end(), 0.0);
+    WLFactor     = WLInitialLnF;
+    WLStagesDone = 0;
+    UseWLBias    = true;
+    UseTMBias    = false;
+  }
+  //If the WL histogram is flat over the whole window: ln f /= 2, reset the WL histogram, return true//
+  bool CheckWLFlatness()
+  {
+    if(!UseWLBias || WLHistogram.empty()) return false;
+    double MinH = WLHistogram[0]; double Sum = 0.0;
+    for(size_t a = 0; a < WLHistogram.size(); a++)
+    {
+      if(WLHistogram[a] < MinH) MinH = WLHistogram[a];
+      Sum += WLHistogram[a];
+    }
+    double Mean = Sum / static_cast<double>(WLHistogram.size());
+    if(Mean <= 0.0 || MinH <= WLFlatness * Mean) return false;
+    WLStagesDone ++;
+    WLFactor *= 0.5;
+    std::fill(WLHistogram.begin(), WLHistogram.end(), 0.0);
+    return true;
+  }
+  //Stop WL, use the TM bias from the collection matrix from now on//
+  void SwitchWLToTM()
+  {
+    UseWLBias = false;
+    UseTMBias = true;
+    AdjustTMBias();
   }
   //Special update function just for CBCF moves//
   void UpdateCBCF(double Pacc, size_t N, int change)
@@ -214,8 +256,6 @@ struct TMMC
 
     CMatrix[BinLocation].z += Pacc;     //Insertion is the third value//
     CMatrix[BinLocation].y += 1-Pacc;
-    ln_g[NewBinLocation]  += WLFactor;
-    WLBias[NewBinLocation] = -ln_g[N]; //WL Bias//
   }
   //Zhao's note: the N below is the Number of Molecule from the OLD STATE//
   //The bias is added to the preFactor//

@@ -2500,6 +2500,33 @@ void read_component_values_from_simulation_input(Variables& Vars, Components& Sy
           if(caseInSensStringCompare(termsScannedLined[1], "yes"))
             temp_tmmc.RezeroAfterInitialization = true;
         }
+        if (str.find("UseWLInEquilibration", 0) != std::string::npos)
+        {
+          Split_Tab_Space(termsScannedLined, str);
+          if(caseInSensStringCompare(termsScannedLined[1], "yes"))
+            temp_tmmc.UseWLInEquilibration = true;
+        }
+        if (str.find("WLInitialLnF", 0) != std::string::npos)
+        {
+          Split_Tab_Space(termsScannedLined, str);
+          temp_tmmc.WLInitialLnF = std::stod(termsScannedLined[1]);
+        }
+        //WLFlatness is a substring of WLFlatnessCheckEvery: check the longer one first//
+        if (str.find("WLFlatnessCheckEvery", 0) != std::string::npos)
+        {
+          Split_Tab_Space(termsScannedLined, str);
+          sscanf(termsScannedLined[1].c_str(), "%zu", &temp_tmmc.WLFlatnessCheckEvery);
+        }
+        else if (str.find("WLFlatness", 0) != std::string::npos)
+        {
+          Split_Tab_Space(termsScannedLined, str);
+          temp_tmmc.WLFlatness = std::stod(termsScannedLined[1]);
+        }
+        if (str.find("WLStagesBeforeSwitch", 0) != std::string::npos)
+        {
+          Split_Tab_Space(termsScannedLined, str);
+          sscanf(termsScannedLined[1].c_str(), "%zu", &temp_tmmc.WLStagesBeforeSwitch);
+        }
       }
 
       if(SystemComponents.UseDNNforHostGuest)
@@ -2680,6 +2707,20 @@ void read_component_values_from_simulation_input(Variables& Vars, Components& Sy
     temp_tmmc.forward_lnpi.resize(NBin);
     temp_tmmc.reverse_lnpi.resize(NBin);
     temp_tmmc.Histogram.resize(NBin);
+    temp_tmmc.WLHistogram.resize(NBin);
+    if(temp_tmmc.UseWLInEquilibration)
+    {
+      if(!temp_tmmc.DoUseBias)
+        throw std::runtime_error("TMMC: UseWLInEquilibration needs UseBiasOnMacrostate yes (the WL bias would not be applied)!");
+      if(temp_tmmc.WLInitialLnF <= 0.0)
+        throw std::runtime_error("TMMC: WLInitialLnF must be > 0!");
+      if(temp_tmmc.WLFlatness <= 0.0 || temp_tmmc.WLFlatness >= 1.0)
+        throw std::runtime_error("TMMC: WLFlatness must be between 0 and 1!");
+      if(temp_tmmc.WLFlatnessCheckEvery == 0)
+        throw std::runtime_error("TMMC: WLFlatnessCheckEvery must be > 0!");
+      if(temp_tmmc.WLStagesBeforeSwitch == 0)
+        throw std::runtime_error("TMMC: WLStagesBeforeSwitch must be >= 1!");
+    }
     //Zhao's note: one must do TMMC restart and RestartInitial together, and skip the initializations//
     if(temp_tmmc.TMMCRestart)
     {
