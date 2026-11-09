@@ -2259,7 +2259,7 @@ static inline void Read_TMMC_Initial(TMMC& tmmc, std::string& MolName)
     }
     else if(counter == 3)
     {
-      tmmc.WLFactor = std::stoi(termsScannedLined[3]);
+      tmmc.WLFactor = std::stod(termsScannedLined[3]);
     }
     }
     ++Histogramsize;
@@ -2721,6 +2721,10 @@ void read_component_values_from_simulation_input(Variables& Vars, Components& Sy
       if(temp_tmmc.WLStagesBeforeSwitch == 0)
         throw std::runtime_error("TMMC: WLStagesBeforeSwitch must be >= 1!");
     }
+    if(temp_tmmc.TMMCRestart && temp_tmmc.RezeroAfterInitialization)
+      throw std::runtime_error("TMMC: RestartTMMC yes + RezeroAfterInitialization yes would erase the restarted TMMC statistics at the start of equilibration. Use only one of them!");
+    if(temp_tmmc.TMMCRestart && temp_tmmc.UseWLInEquilibration)
+      throw std::runtime_error("TMMC: RestartTMMC yes + UseWLInEquilibration yes is not supported (yet)!");
     //Zhao's note: one must do TMMC restart and RestartInitial together, and skip the initializations//
     if(temp_tmmc.TMMCRestart)
     {
