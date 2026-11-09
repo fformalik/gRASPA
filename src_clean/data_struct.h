@@ -147,6 +147,11 @@ struct TMMC
   std::vector<double>  WLHistogram;    //visits in the current WL stage//
   size_t WLCollectAfterStages = 0;     //collect the C matrix only after this many flat WL stages (0: from the start)//
   bool   CollectCMatrix       = true;  //false while WL runs with WLCollectAfterStages not reached//
+  //Keyword WLAsBiasGuess: at the switch the TM bias is set to the WL bias (-ln g) and the C matrix is zeroed;//
+  //this guess is kept (static bias) until every link of the window is known in C and every bin has WLGuessMinVisits steps//
+  bool   WLAsBiasGuess        = false;
+  size_t WLGuessMinVisits     = 1000;
+  bool   TMGuessActive        = false;
   //Zhao's note: the N below is the Number of Molecule from the OLD STATE//
   //(According to Vince Shen's code)//
   void Update(double Pacc, size_t N, int MoveType) 
@@ -255,6 +260,17 @@ struct TMMC
   bool SwitchWLToTM()
   {
     bool WasCollecting = CollectCMatrix;
+    if(WLAsBiasGuess)
+    {
+      TMBias = WLBias; //-ln g, only differences enter the acceptance//
+      double3 temp = {0.0, 0.0, 0.0};
+      std::fill(CMatrix.begin(), CMatrix.end(), temp);
+      CollectCMatrix = true;
+      TMGuessActive  = true;
+      UseWLBias = false;
+      UseTMBias = true;
+      return WasCollecting;
+    }
     if(!WasCollecting)
     {
       double3 temp = {0.0, 0.0, 0.0};
@@ -404,6 +420,14 @@ struct TMMC
   void AdjustTMBias() 
   { 
     if(!DoTMMC || !DoUseBias || !UseTMBias) return;
+    if(TMGuessActive) //keep the WL guess until the C matrix collected under it covers the whole window//
+    {
+      for(size_t a = 0; a < CMatrix.size(); a++)
+        if(CMatrix[a].x + CMatrix[a].y + CMatrix[a].z < static_cast<double>(WLGuessMinVisits)) return;
+      for(size_t a = 0; a + 1 < CMatrix.size(); a++)
+        if(!LinkKnown(a)) return;
+      TMGuessActive = false;
+    }
     size_t Ref = 0;
     if(!MostVisitedBin(Ref)) return; //nothing sampled yet, keep the current bias//
     TMUpdateTimes ++;

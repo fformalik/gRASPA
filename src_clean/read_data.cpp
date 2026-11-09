@@ -2532,6 +2532,17 @@ void read_component_values_from_simulation_input(Variables& Vars, Components& Sy
           Split_Tab_Space(termsScannedLined, str);
           sscanf(termsScannedLined[1].c_str(), "%zu", &temp_tmmc.WLCollectAfterStages);
         }
+        if (str.find("WLAsBiasGuess", 0) != std::string::npos)
+        {
+          Split_Tab_Space(termsScannedLined, str);
+          if(caseInSensStringCompare(termsScannedLined[1], "yes"))
+            temp_tmmc.WLAsBiasGuess = true;
+        }
+        if (str.find("WLGuessMinVisits", 0) != std::string::npos)
+        {
+          Split_Tab_Space(termsScannedLined, str);
+          sscanf(termsScannedLined[1].c_str(), "%zu", &temp_tmmc.WLGuessMinVisits);
+        }
       }
 
       if(SystemComponents.UseDNNforHostGuest)
@@ -2713,6 +2724,8 @@ void read_component_values_from_simulation_input(Variables& Vars, Components& Sy
     temp_tmmc.reverse_lnpi.resize(NBin);
     temp_tmmc.Histogram.resize(NBin);
     temp_tmmc.WLHistogram.resize(NBin);
+    if(temp_tmmc.WLAsBiasGuess && !temp_tmmc.UseWLInEquilibration)
+      throw std::runtime_error("TMMC: WLAsBiasGuess needs UseWLInEquilibration yes!");
     if(temp_tmmc.UseWLInEquilibration)
     {
       if(!temp_tmmc.DoUseBias)
@@ -2725,6 +2738,8 @@ void read_component_values_from_simulation_input(Variables& Vars, Components& Sy
         throw std::runtime_error("TMMC: WLFlatnessCheckEvery must be > 0!");
       if(temp_tmmc.WLStagesBeforeSwitch == 0)
         throw std::runtime_error("TMMC: WLStagesBeforeSwitch must be >= 1!");
+      if(temp_tmmc.WLAsBiasGuess && temp_tmmc.WLGuessMinVisits == 0)
+        throw std::runtime_error("TMMC: WLGuessMinVisits must be > 0!");
       if(temp_tmmc.WLCollectAfterStages >= temp_tmmc.WLStagesBeforeSwitch)
         throw std::runtime_error("TMMC: WLCollectAfterStages must be < WLStagesBeforeSwitch (the TM bias needs C-matrix data)!");
     }

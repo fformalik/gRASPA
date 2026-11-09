@@ -457,7 +457,12 @@ void GatherStatisticsDuringSimulation(Variables& Vars, size_t systemId, size_t c
   {
     for(size_t comp = 0; comp < SystemComponents.NComponents.x; comp++)
       if(i % SystemComponents.Tmmc[comp].UpdateTMEvery == 0)
+      {
+        bool WasGuess = SystemComponents.Tmmc[comp].TMGuessActive;
         SystemComponents.Tmmc[comp].AdjustTMBias();
+        if(WasGuess && !SystemComponents.Tmmc[comp].TMGuessActive)
+          fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu, cycle %zu: C matrix collected under the WL guess covers the window, TM bias from C from now on\n", comp, i);
+      }
   }
   if(SimulationMode == EQUILIBRATION && i > 0) //Wang-Landau stage: flatness check, switch to the TM bias//
   {
@@ -472,7 +477,7 @@ void GatherStatisticsDuringSimulation(Variables& Vars, size_t systemId, size_t c
       if(Tmmc.WLStagesDone >= Tmmc.WLStagesBeforeSwitch)
       {
         Tmmc.SwitchWLToTM();
-        fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu, cycle %zu: switching to the TMMC bias\n", comp, i);
+        fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu, cycle %zu: switching to the TMMC bias%s\n", comp, i, Tmmc.WLAsBiasGuess ? " (WL bias kept as static guess, C matrix reset)" : "");
       }
     }
   }
@@ -596,7 +601,7 @@ void InitialMCBeforeMoves(Variables& Vars, size_t systemId)
         fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu: %zu flat stage(s) (< WLStagesBeforeSwitch = %zu) at the end of equilibration\n", comp, Tmmc.WLStagesDone, Tmmc.WLStagesBeforeSwitch);
       if(!Tmmc.SwitchWLToTM())
         fprintf(SystemComponents.OUTPUT, "TMMC-WL WARNING: component %zu: only %zu flat stage(s) < WLCollectAfterStages = %zu, the C matrix was never collected; TM bias starts flat\n", comp, Tmmc.WLStagesDone, Tmmc.WLCollectAfterStages);
-      fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu: switching to the TMMC bias at the start of production\n", comp);
+      fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu: switching to the TMMC bias at the start of production%s\n", comp, Tmmc.WLAsBiasGuess ? " (WL bias kept as static guess, C matrix reset)" : "");
     }
   }
 }

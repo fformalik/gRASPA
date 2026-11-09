@@ -222,6 +222,32 @@ int main()
     printf("[ok] WLCollectAfterStages: no C before K stages, reset at K, forced switch zeroes C\n");
   }
 
+  // 10. WLAsBiasGuess: TM bias = WL bias at the switch, C reset, guess kept until C covers the window//
+  {
+    TMMC t = MakeTMMC(0, 9);
+    t.UseWLInEquilibration = true; t.WLAsBiasGuess = true; t.WLGuessMinVisits = 50;
+    t.StartWL();
+    for(size_t N = 0; N <= 9; N++) for(size_t k = 0; k <= N; k++) t.RecordState(N); //some ln g//
+    t.CMatrix[3] = {7.0, 7.0, 7.0}; //WL-phase C, must be discarded//
+    std::vector<double> wl = t.WLBias;
+    t.SwitchWLToTM();
+    assert(t.TMGuessActive && t.UseTMBias && !t.UseWLBias && t.CMatrix[3].x == 0.0);
+    for(size_t a = 0; a < wl.size(); a++) assert(t.TMBias[a] == wl[a]);
+    //partial C (only 0..4 known): guess must be kept//
+    for(size_t a = 0; a < 5; a++) { t.CMatrix[a] = {0.1, 99.8, 0.1}; t.Histogram[a] = 100.0; }
+    t.AdjustTMBias();
+    assert(t.TMGuessActive);
+    for(size_t a = 0; a < wl.size(); a++) assert(t.TMBias[a] == wl[a]);
+    //complete C with enough visits: guess released, bias from C//
+    for(size_t a = 0; a < 10; a++) { t.CMatrix[a] = {0.0, 0.0, 0.0}; t.Histogram[a] = 0.0; }
+    FillDetailedBalance(t, target);
+    for(size_t a = 0; a < 10; a++) { t.CMatrix[a].x *= 100; t.CMatrix[a].y *= 100; t.CMatrix[a].z *= 100; } //100 steps per bin//
+    t.AdjustTMBias();
+    assert(!t.TMGuessActive);
+    for(size_t a = 0; a < target.size(); a++) assert(Near(LnpiDiff(t, 0, a), target[a] - target[0], 1e-10));
+    printf("[ok] WLAsBiasGuess: TM bias = WL bias, C reset, guess kept until C covers the window\n");
+  }
+
   printf("all TMMC tests passed\n");
   return 0;
 }
