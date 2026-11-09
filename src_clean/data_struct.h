@@ -311,55 +311,72 @@ struct TMMC
     TMMCBias   = std::exp(TMMCBias);
     preFactor *= TMMCBias;
   }
+  //ln of the transition probability per MC step from bin a: dir = +1 (C.z) or -1 (C.x)//
+  double LnTransition(size_t a, int dir) const
+  {
+    double total = CMatrix[a].x + CMatrix[a].y + CMatrix[a].z;
+    double count = (dir > 0) ? CMatrix[a].z : CMatrix[a].x;
+    return std::log(count) - std::log(total);
+  }
+  //The link a <-> a+1 is usable only with collection-matrix data in BOTH directions//
+  bool LinkKnown(size_t a) const
+  {
+    return (a + 1 < CMatrix.size()) && (CMatrix[a].z > 0.0) && (CMatrix[a + 1].x > 0.0);
+  }
+  //Most visited bin (Histogram = post-move states); returns false if nothing was recorded yet//
+  bool MostVisitedBin(size_t& Ref) const
+  {
+    double MaxHist = 0.0; Ref = 0;
+    for(size_t a = 0; a < Histogram.size(); a++)
+      if(Histogram[a] > MaxHist) { MaxHist = Histogram[a]; Ref = a; }
+    return MaxHist > 0.0;
+  }
+  //Connected range of known links around Ref: [Lo, Hi]//
+  void KnownRange(size_t Ref, size_t& Lo, size_t& Hi) const
+  {
+    Lo = Ref; Hi = Ref;
+    while(Lo > 0 && LinkKnown(Lo - 1)) Lo--;
+    while(LinkKnown(Hi)) Hi++;
+  }
   //Add features about CBCFC + TMMC//
   void AdjustTMBias() 
   { 
     if(!DoTMMC || !DoUseBias || !UseTMBias) return;
+    size_t Ref = 0;
+    if(!MostVisitedBin(Ref)) return; //nothing sampled yet, keep the current bias//
     TMUpdateTimes ++;
-    //printf("Adjusting TMBias\n");
-    //First step is to get the lowest and highest visited states in terms of loading//
-    size_t MinVisited = 0; size_t MaxVisited = 0;
-    size_t nonzeroCount=0;
-    //The a, MinVisited, and MaxVisited here do not go out of bound of the vector//
     size_t NTotalBins = Histogram.size();
-    for(size_t a = 0; a < NTotalBins; a++)
-    {
-      if(Histogram[a] != 0)
-      {
-        if(nonzeroCount==0) MinVisited = a;
-        MaxVisited = a;
-        nonzeroCount++;
-      }
-    }
     //Start from scratch: no value from the previous update may enter this estimate//
     std::fill(lnpi.begin(),         lnpi.end(),         0.0);
     std::fill(forward_lnpi.begin(), forward_lnpi.end(), 0.0);
     std::fill(reverse_lnpi.begin(), reverse_lnpi.end(), 0.0);
-    //From Vince Shen's pseudo code//
-    lnpi[MinVisited] = 0.0;
-    double Maxlnpi = lnpi[MinVisited];
-    //Update the lnpi for the sampled region//
-    //x: -1; y: 0; z: +1//
-    for(size_t a = MinVisited; a < MaxVisited; a++)
+    //Integrate from the most visited bin up and down, only across links known in both directions//
+    //lnpi[b] - lnpi[a] = ln P(a->b) - ln P(b->a); forward_lnpi: after the first term, reverse_lnpi: final//
+    size_t Lo, Hi;
+    KnownRange(Ref, Lo, Hi);
+    lnpi[Ref] = 0.0;
+    for(size_t a = Ref; a < Hi; a++)
     {
-      //Zhao's note: add protection to avoid numerical issues//
-      if(CMatrix[a].z   != 0) lnpi[a+1] = lnpi[a]   + std::log(CMatrix[a].z)   - std::log(CMatrix[a].x   + CMatrix[a].y   + CMatrix[a].z);   //Forward//
-      forward_lnpi[a+1] = lnpi[a+1];
-      if(CMatrix[a+1].x != 0) lnpi[a+1] = lnpi[a+1] - std::log(CMatrix[a+1].x) + std::log(CMatrix[a+1].x + CMatrix[a+1].y + CMatrix[a+1].z); //Reverse//
+      forward_lnpi[a+1] = lnpi[a] + LnTransition(a, +1);
+      lnpi[a+1]         = forward_lnpi[a+1] - LnTransition(a+1, -1);
       reverse_lnpi[a+1] = lnpi[a+1];
-      //printf("Loading: %zu, a+1, %zu, lnpi[a]: %.5f, lnpi[a+1]: %.5f\n", a, a+1, lnpi[a], lnpi[a+1]);
-      if(lnpi[a+1] > Maxlnpi) Maxlnpi = lnpi[a+1];
     }
-    //For the unsampled states, fill them with the MinVisited/MaxVisited stats//
-    for(size_t a = 0; a < MinVisited; a++) lnpi[a] = lnpi[MinVisited];
-    for(size_t a = MaxVisited; a < NTotalBins; a++) lnpi[a] = lnpi[MaxVisited];
+    for(size_t a = Ref; a > Lo; a--)
+    {
+      forward_lnpi[a-1] = lnpi[a] + LnTransition(a, -1);
+      lnpi[a-1]         = forward_lnpi[a-1] - LnTransition(a-1, +1);
+      reverse_lnpi[a-1] = lnpi[a-1];
+    }
+    //Outside the known range: constant extrapolation (neutral bias)//
+    for(size_t a = 0;    a < Lo;         a++) lnpi[a] = lnpi[Lo];
+    for(size_t a = Hi+1; a < NTotalBins; a++) lnpi[a] = lnpi[Hi];
     //Normalize//
+    double Maxlnpi = lnpi[0];
+    for(size_t a = 0; a < NTotalBins; a++) if(lnpi[a] > Maxlnpi) Maxlnpi = lnpi[a];
     double NormalFactor = 0.0;
     for(size_t a = 0; a < NTotalBins; a++) lnpi[a] -= Maxlnpi;
     for(size_t a = 0; a < NTotalBins; a++) NormalFactor += std::exp(lnpi[a]); //sum of exp(lnpi)//
-    //printf("Normalize Factor (Before): %.5f\n", NormalFactor);
     NormalFactor = -std::log(NormalFactor); //Take log of NormalFactor//
-    //printf("Normalize Factor (After):  %.5f\n", NormalFactor);
     for(size_t a = 0; a < NTotalBins; a++)
     {
       lnpi[a] += NormalFactor; //Zhao's note: mind the sign//
