@@ -2,10 +2,12 @@
 # Build the vanilla (no ML) gRASPA on Perlmutter from src_clean into <repo>/build-vanilla.
 # Applies Step 6 (experimental::filesystem) to the copy only, so src_clean stays clean in git.
 # cuda/12.4 no longer exists on Perlmutter -> nvidia/24.5 + cudatoolkit/12.4.
-# Usage: Cluster-Setup/NERSC_Installation_Nov2025/build_vanilla_perlmutter.sh   (from anywhere)
+# Usage: Cluster-Setup/NERSC_Installation_Nov2025/build_vanilla_perlmutter.sh [build_dir]   (from anywhere)
+#        build_dir defaults to <repo>/build-vanilla; it is deleted and recreated.
 set -e
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
-BUILD=$REPO/build-vanilla
+BUILD=${1:-$REPO/build-vanilla}
+mkdir -p "$BUILD" && BUILD=$(cd "$BUILD" && pwd)
 
 module load PrgEnv-nvidia
 module load nvidia/24.5
