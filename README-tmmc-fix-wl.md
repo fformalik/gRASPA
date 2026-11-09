@@ -14,6 +14,7 @@ This branch includes everything from `tmmc-dev`.
 | `WLFlatness x` | 0.8 | The WL histogram counts as flat if min > x * mean over the whole window. |
 | `WLFlatnessCheckEvery N` | 10000 | Flatness is checked every N cycles. |
 | `WLStagesBeforeSwitch N` | 1 | The bias switches to TMMC after N flat stages, or at the end of equilibration at the latest. |
+| `WLCollectAfterStages K` | 0 | The C matrix is collected only after K flat WL stages; at stage K it is zeroed. Must be < `WLStagesBeforeSwitch`. 0 = collect from the start of WL. |
 
 Without the WL keywords, old inputs run as before. The only differences come from the corrected bias (see below).
 
@@ -26,13 +27,20 @@ Without the WL keywords, old inputs run as before. The only differences come fro
 3. **Equilibration, WL phase.**
    - After every MC step, `ln g[N] += ln f` for the post-move state N, and the bias is −ln g.
    - Every `WLFlatnessCheckEvery` cycles, the WL histogram is checked. If it is flat, ln f is halved and the WL histogram is cleared.
+   - After `WLCollectAfterStages` flat stages, the C matrix is zeroed and collected from then on.
    - After `WLStagesBeforeSwitch` flat stages, the bias switches to TMMC.
 4. **Production.**
    - If WL is still active, it is switched off.
    - If the WL histogram was never flat, `output.txt` gets a warning with the N range known in the C matrix.
    - From then on the bias is TMBias = −ln Π from the C matrix, updated every `UpdateTMMCEvery` cycles.
 
-The C matrix is collected the whole time with the unbiased Pacc. It is never cleared at the switch or at the start of production.
+The C matrix uses the unbiased Pacc. With `WLCollectAfterStages 0` it is collected from the start of WL. It is never cleared at the switch or at the start of production.
+
+**Use `WLCollectAfterStages` > 0.** An unbiased Pacc is not enough for C to be correct.
+- While ln f is large, the WL bias changes every step and pushes the system out of each N before the configuration equilibrates. The transition probabilities in C are then sampled on non-equilibrium configurations.
+- In the bulk-water test, C from the first WL stages gave P(2→1) = 0.154 instead of 0.104, and lnΠ that was far too steep.
+- The TM bias built from that C pushed every window to its upper edge.
+- FEASST WLTM avoids this with `collect_flatness` (18 of 22 stages in its TIP4P tutorial).
 
 The WL log lines in `output.txt` start with `TMMC-WL`.
 
