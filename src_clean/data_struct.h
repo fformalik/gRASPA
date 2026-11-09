@@ -145,11 +145,13 @@ struct TMMC
   size_t WLStagesBeforeSwitch = 1;     //switch to the TM bias after this many flat stages//
   size_t WLStagesDone         = 0;
   std::vector<double>  WLHistogram;    //visits in the current WL stage//
+  size_t WLCollectAfterStages = 0;     //collect the C matrix only after this many flat WL stages (0: from the start)//
+  bool   CollectCMatrix       = true;  //false while WL runs with WLCollectAfterStages not reached//
   //Zhao's note: the N below is the Number of Molecule from the OLD STATE//
   //(According to Vince Shen's code)//
   void Update(double Pacc, size_t N, int MoveType) 
   {
-    if(!DoTMMC) return;
+    if(!DoTMMC || !CollectCMatrix) return;
     if (Pacc > 1.0) Pacc = 1.0; //If Pacc is too big, reduce to 1.0//
     size_t BinLocation = (N - MinMacrostate) * nbinPerMacrostate + currentBin;
     switch(MoveType)
@@ -219,6 +221,17 @@ struct TMMC
     WLStagesDone = 0;
     UseWLBias    = true;
     UseTMBias    = false;
+    CollectCMatrix = (WLCollectAfterStages == 0);
+  }
+  //After WLCollectAfterStages flat stages: zero the C matrix and start collecting it//
+  //(configurations sampled while ln f is large are not equilibrated within a macrostate, see FEASST WLTM collect_flatness)//
+  bool StartCollectionIfDue()
+  {
+    if(CollectCMatrix || WLStagesDone < WLCollectAfterStages) return false;
+    double3 temp = {0.0, 0.0, 0.0};
+    std::fill(CMatrix.begin(), CMatrix.end(), temp);
+    CollectCMatrix = true;
+    return true;
   }
   //If the WL histogram is flat over the whole window: ln f /= 2, reset the WL histogram, return true//
   bool CheckWLFlatness()
@@ -238,16 +251,25 @@ struct TMMC
     return true;
   }
   //Stop WL, use the TM bias from the collection matrix from now on//
-  void SwitchWLToTM()
+  //Returns false if the C matrix was not being collected yet: it is then zeroed and the TM bias starts flat//
+  bool SwitchWLToTM()
   {
+    bool WasCollecting = CollectCMatrix;
+    if(!WasCollecting)
+    {
+      double3 temp = {0.0, 0.0, 0.0};
+      std::fill(CMatrix.begin(), CMatrix.end(), temp);
+      CollectCMatrix = true;
+    }
     UseWLBias = false;
     UseTMBias = true;
     AdjustTMBias();
+    return WasCollecting;
   }
   //Special update function just for CBCF moves//
   void UpdateCBCF(double Pacc, size_t N, int change)
   {
-    if(!DoTMMC) return;
+    if(!DoTMMC || !CollectCMatrix) return;
     if (Pacc > 1.0) Pacc = 1.0; //If Pacc is too big, reduce to 1.0//
     size_t BinLocation = (N - MinMacrostate) * nbinPerMacrostate + currentBin;
     size_t NewBinLocation = BinLocation + change;

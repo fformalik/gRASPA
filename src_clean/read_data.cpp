@@ -2527,6 +2527,11 @@ void read_component_values_from_simulation_input(Variables& Vars, Components& Sy
           Split_Tab_Space(termsScannedLined, str);
           sscanf(termsScannedLined[1].c_str(), "%zu", &temp_tmmc.WLStagesBeforeSwitch);
         }
+        if (str.find("WLCollectAfterStages", 0) != std::string::npos)
+        {
+          Split_Tab_Space(termsScannedLined, str);
+          sscanf(termsScannedLined[1].c_str(), "%zu", &temp_tmmc.WLCollectAfterStages);
+        }
       }
 
       if(SystemComponents.UseDNNforHostGuest)
@@ -2720,6 +2725,8 @@ void read_component_values_from_simulation_input(Variables& Vars, Components& Sy
         throw std::runtime_error("TMMC: WLFlatnessCheckEvery must be > 0!");
       if(temp_tmmc.WLStagesBeforeSwitch == 0)
         throw std::runtime_error("TMMC: WLStagesBeforeSwitch must be >= 1!");
+      if(temp_tmmc.WLCollectAfterStages >= temp_tmmc.WLStagesBeforeSwitch)
+        throw std::runtime_error("TMMC: WLCollectAfterStages must be < WLStagesBeforeSwitch (the TM bias needs C-matrix data)!");
     }
     if(temp_tmmc.TMMCRestart && temp_tmmc.RezeroAfterInitialization)
       throw std::runtime_error("TMMC: RestartTMMC yes + RezeroAfterInitialization yes would erase the restarted TMMC statistics at the start of equilibration. Use only one of them!");

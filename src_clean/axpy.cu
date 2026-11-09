@@ -467,6 +467,8 @@ void GatherStatisticsDuringSimulation(Variables& Vars, size_t systemId, size_t c
       if(!Tmmc.UseWLBias || i % Tmmc.WLFlatnessCheckEvery != 0) continue;
       if(!Tmmc.CheckWLFlatness()) continue;
       fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu, cycle %zu: WL histogram flat, stage %zu done, ln f -> %.6g\n", comp, i, Tmmc.WLStagesDone, Tmmc.WLFactor);
+      if(Tmmc.StartCollectionIfDue())
+        fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu, cycle %zu: %zu flat stage(s) done, C matrix reset, collecting it from now on\n", comp, i, Tmmc.WLStagesDone);
       if(Tmmc.WLStagesDone >= Tmmc.WLStagesBeforeSwitch)
       {
         Tmmc.SwitchWLToTM();
@@ -570,7 +572,7 @@ void InitialMCBeforeMoves(Variables& Vars, size_t systemId)
       if(Tmmc.DoTMMC && Tmmc.UseWLInEquilibration)
       {
         Tmmc.StartWL();
-        fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu: Wang-Landau bias in equilibration, ln f = %.6g, flatness %.3g, check every %zu cycles, switch to TMMC after %zu flat stage(s)\n", comp, Tmmc.WLFactor, Tmmc.WLFlatness, Tmmc.WLFlatnessCheckEvery, Tmmc.WLStagesBeforeSwitch);
+        fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu: Wang-Landau bias in equilibration, ln f = %.6g, flatness %.3g, check every %zu cycles, collect C after %zu flat stage(s), switch to TMMC after %zu flat stage(s)\n", comp, Tmmc.WLFactor, Tmmc.WLFlatness, Tmmc.WLFlatnessCheckEvery, Tmmc.WLCollectAfterStages, Tmmc.WLStagesBeforeSwitch);
       }
     }
   }
@@ -592,7 +594,8 @@ void InitialMCBeforeMoves(Variables& Vars, size_t systemId)
       }
       else
         fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu: %zu flat stage(s) (< WLStagesBeforeSwitch = %zu) at the end of equilibration\n", comp, Tmmc.WLStagesDone, Tmmc.WLStagesBeforeSwitch);
-      Tmmc.SwitchWLToTM();
+      if(!Tmmc.SwitchWLToTM())
+        fprintf(SystemComponents.OUTPUT, "TMMC-WL WARNING: component %zu: only %zu flat stage(s) < WLCollectAfterStages = %zu, the C matrix was never collected; TM bias starts flat\n", comp, Tmmc.WLStagesDone, Tmmc.WLCollectAfterStages);
       fprintf(SystemComponents.OUTPUT, "TMMC-WL: component %zu: switching to the TMMC bias at the start of production\n", comp);
     }
   }

@@ -191,6 +191,37 @@ int main()
     printf("[ok] WL: StartWL reset, relative ln_g, flatness -> ln f/2, switch to TM\n");
   }
 
+  // 9. WLCollectAfterStages: no C collection until K flat stages, then C reset and collected//
+  {
+    TMMC t = MakeTMMC(0, 2);
+    t.UseWLInEquilibration = true; t.WLCollectAfterStages = 2; t.WLStagesBeforeSwitch = 3;
+    t.CMatrix[1] = {5.0, 5.0, 5.0}; //data from initialization, must be discarded//
+    t.StartWL();
+    assert(!t.CollectCMatrix);
+    t.Update(0.5, 1, INSERTION);
+    assert(t.CMatrix[1].z == 5.0); //not collected//
+    for(int stage = 0; stage < 2; stage++)
+    {
+      assert(!t.StartCollectionIfDue());
+      for(size_t N = 0; N <= 2; N++) t.RecordState(N);
+      assert(t.CheckWLFlatness());
+    }
+    assert(t.StartCollectionIfDue() && t.CollectCMatrix);
+    assert(t.CMatrix[1].x == 0.0 && t.CMatrix[1].y == 0.0 && t.CMatrix[1].z == 0.0);
+    t.Update(0.5, 1, INSERTION);
+    assert(t.CMatrix[1].z == 0.5 && t.CMatrix[1].y == 0.5);
+    assert(t.SwitchWLToTM()); //was collecting//
+
+    //forced switch before K stages: C zeroed, collection starts, returns false//
+    TMMC u = MakeTMMC(0, 2);
+    u.UseWLInEquilibration = true; u.WLCollectAfterStages = 2; u.WLStagesBeforeSwitch = 3;
+    u.CMatrix[0] = {1.0, 1.0, 1.0};
+    u.StartWL();
+    assert(!u.SwitchWLToTM());
+    assert(u.CollectCMatrix && u.UseTMBias && !u.UseWLBias && u.CMatrix[0].z == 0.0);
+    printf("[ok] WLCollectAfterStages: no C before K stages, reset at K, forced switch zeroes C\n");
+  }
+
   printf("all TMMC tests passed\n");
   return 0;
 }
