@@ -2724,6 +2724,9 @@ void read_component_values_from_simulation_input(Variables& Vars, Components& Sy
     temp_tmmc.reverse_lnpi.resize(NBin);
     temp_tmmc.Histogram.resize(NBin);
     temp_tmmc.WLHistogram.resize(NBin);
+    temp_tmmc.EnergyCount.assign(NBin, 0.0);
+    temp_tmmc.EnergyMean.assign(NBin, 0.0);
+    temp_tmmc.EnergyM2.assign(NBin, 0.0);
     if(temp_tmmc.WLAsBiasGuess && !temp_tmmc.UseWLInEquilibration)
       throw std::runtime_error("TMMC: WLAsBiasGuess needs UseWLInEquilibration yes!");
     if(temp_tmmc.UseWLInEquilibration)

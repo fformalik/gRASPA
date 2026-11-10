@@ -121,6 +121,11 @@ struct TMMC
   std::vector<double>  forward_lnpi; //Debugging//
   std::vector<double>  reverse_lnpi;
   std::vector<double>  Histogram;
+  //Per-bin running statistics (Welford) of the total energy of the system after each MC step, internal units//
+  //Reset together with the C matrix. Used for temperature extrapolation of lnPi (d lnPi/d beta = -<U>_N + <U>)//
+  std::vector<double>  EnergyCount;
+  std::vector<double>  EnergyMean;
+  std::vector<double>  EnergyM2;
   double WLFactor      = 1.0;
   size_t MaxMacrostate     = 0;
   size_t MinMacrostate     = 0;
@@ -215,6 +220,24 @@ struct TMMC
       WLHistogram[BinLocation] ++;
     }
   }
+  //Running mean and variance (Welford) of the total energy E in the current bin of macrostate N//
+  void RecordEnergy(size_t N, double E)
+  {
+    if(!DoTMMC) return;
+    if(N < MinMacrostate || N > MaxMacrostate) return;
+    size_t b = (N - MinMacrostate) * nbinPerMacrostate + currentBin;
+    if(b >= EnergyCount.size()) return;
+    EnergyCount[b] += 1.0;
+    double d = E - EnergyMean[b];
+    EnergyMean[b] += d / EnergyCount[b];
+    EnergyM2[b]   += d * (E - EnergyMean[b]);
+  }
+  void ClearEnergyStats()
+  {
+    std::fill(EnergyCount.begin(), EnergyCount.end(), 0.0);
+    std::fill(EnergyMean.begin(),  EnergyMean.end(),  0.0);
+    std::fill(EnergyM2.begin(),    EnergyM2.end(),    0.0);
+  }
   //Start the WL stage (beginning of Equilibration): ln g, WL bias and WL histogram from zero//
   void StartWL()
   {
@@ -235,6 +258,7 @@ struct TMMC
     if(CollectCMatrix || WLStagesDone < WLCollectAfterStages) return false;
     double3 temp = {0.0, 0.0, 0.0};
     std::fill(CMatrix.begin(), CMatrix.end(), temp);
+    ClearEnergyStats();
     CollectCMatrix = true;
     return true;
   }
@@ -265,6 +289,7 @@ struct TMMC
       TMBias = WLBias; //-ln g, only differences enter the acceptance//
       double3 temp = {0.0, 0.0, 0.0};
       std::fill(CMatrix.begin(), CMatrix.end(), temp);
+      ClearEnergyStats();
       CollectCMatrix = true;
       TMGuessActive  = true;
       UseWLBias = false;
@@ -275,6 +300,7 @@ struct TMMC
     {
       double3 temp = {0.0, 0.0, 0.0};
       std::fill(CMatrix.begin(), CMatrix.end(), temp);
+      ClearEnergyStats();
       CollectCMatrix = true;
     }
     UseWLBias = false;
@@ -511,6 +537,7 @@ struct TMMC
     std::fill(Histogram.begin(),  Histogram.end(),  0.0);
     std::fill(lnpi.begin(), lnpi.end(), 0.0);
     std::fill(TMBias.begin(), TMBias.end(), 1.0);
+    ClearEnergyStats();
   }
 };
 
@@ -1336,6 +1363,7 @@ struct Components
       size_t NMol = NumberOfMolecule_for_Component[comp];
       if(hasfractionalMolecule[comp]) NMol--;
       Tmmc[comp].RecordState(NMol);
+      Tmmc[comp].RecordEnergy(NMol, CreateMol_Energy.total() + deltaE.total());
     }
   }
   //TMMC bias//
